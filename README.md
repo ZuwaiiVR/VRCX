@@ -3,9 +3,11 @@
  **Zuwaii: Add SQL feed & Gamelog Output to SQL.**
  
 When toggled enabled, it will write to a SQLite file in ./log.db on runtime. 
+
 ![image](https://github.com/ZuwaiiVR/Teensy_stuff/blob/master/VRCX_wESdvZhi4V.png)
 
 Use any SQLite db browser to read it back.
+
 ![image](https://github.com/ZuwaiiVR/Teensy_stuff/blob/master/DB_Browser_for_SQLite_N5Bh7zXWeu.png)
 
 Requires `--enable-sdk-log-levels` VRChat launch parameter for logging of user requesting video.
