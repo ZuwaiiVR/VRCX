@@ -1,3 +1,34 @@
+# VRCX PyPyDance Companion
+
+[Download](https://github.com/Natsumi-sama/VRCX/releases/)
+
+Requires `--enable-sdk-log-levels` VRChat launch parameter for logging of user requesting video.
+
+**PyPyDance Discord rich presence:**
+
+![image](https://user-images.githubusercontent.com/11171153/101809013-ec83aa00-3b7b-11eb-9167-007825807252.png)
+
+In order to use this you need to disable VRChat's built in [RPC](https://docs.vrchat.com/docs/configuration-file#rich-presence) this can be done wtih `{ "disableRichPresence": true }` inside of `%AppData%\..\LocalLow\VRChat\vrchat\config.json`
+
+**Extra features:**
+
+![image](https://user-images.githubusercontent.com/11171153/97168742-d600d980-17ed-11eb-844f-57273d5e590d.png)
+
+**Now playing information:**
+
+![image](https://user-images.githubusercontent.com/11171153/97169650-42c8a380-17ef-11eb-95b0-a85c51a8de07.png)
+
+**Video progress overlay:**
+
+![image](https://user-images.githubusercontent.com/11171153/97169618-347a8780-17ef-11eb-924a-06c2407f479d.png)
+
+Comes with [nircmd](https://www.nirsoft.net/utils/nircmd.html) for automatically adjusting Windows volume mixer to normalize volume of videos.
+
+
+
+
+
+
 # VRCX
 
 VRCX is an assistant application for VRChat that provides information about and managing friendship. This application uses the unofficial VRChat API (VRCSDK).
@@ -49,7 +80,7 @@ Screenshots
 
 # How to install VRCX
 
-* Download latest release [zip](https://github.com/pypy-vrc/VRCX/releases/latest).
+* Download latest release [zip](https://github.com/Natsumi-sama/VRCX/releases/latest).
 * Extract entire zip archive.
 * Run `VRCX.exe`.
 

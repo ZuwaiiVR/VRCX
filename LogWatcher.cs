@@ -19,6 +19,7 @@ namespace VRCX
             public long Length;
             public long Position;
             public string RecentWorldName;
+            public string LastVideoURL;
             public bool ShaderKeywordsLimitReached = false;
         }
 
@@ -29,6 +30,8 @@ namespace VRCX
         private readonly List<string[]> m_LogList;
         private Thread m_Thread;
         private bool m_ResetLog;
+        private static string playerPlayer = string.Empty;
+        private static string playerRequest = string.Empty;
 
         // NOTE
         // FileSystemWatcher() is unreliable
@@ -193,8 +196,9 @@ namespace VRCX
                                         ParseLogLocation(fileInfo, logContext, line, offset) == true ||
                                         ParseLogPortalSpawn(fileInfo, logContext, line, offset) == true ||
                                         ParseLogJoinBlocked(fileInfo, logContext, line, offset) == true ||
-                                        ParseLogVideoPlay(fileInfo, logContext, line, offset) == true ||
-                                        ParseLogVideoError(fileInfo, logContext, line, offset) == true)
+                                        ParseLogVideoError(fileInfo, logContext, line, offset) == true ||
+                                        ParseLogVideoChange(fileInfo, logContext, line, offset) == true ||
+                                        ParseLogVideoBeep(fileInfo, logContext, line, offset) == true)
                                     {
                                         continue;
                                     }
@@ -203,7 +207,8 @@ namespace VRCX
                             }
 
                             if (ParseLogNotification(fileInfo, logContext, line, 34) == true ||
-                                ParseLogShaderKeywordsLimit(fileInfo, logContext, line, 34) == true)
+                                ParseLogShaderKeywordsLimit(fileInfo, logContext, line, 34) == true ||
+                                ParseLogSDK2VideoPlay(fileInfo, logContext, line, 34) == true)
                             {
                                 continue;
                             }
@@ -276,6 +281,8 @@ namespace VRCX
                     location,
                     logContext.RecentWorldName
                 });
+                playerPlayer = string.Empty;
+                playerRequest = string.Empty;
 
                 return true;
             }
@@ -449,9 +456,9 @@ namespace VRCX
             return true;
         }
 
-        private bool ParseLogVideoPlay(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        private bool ParseLogVideoChange(FileInfo fileInfo, LogContext logContext, string line, int offset)
         {
-            // 2021.04.20 13:37:69 Log        -  [Video Playback] Attempting to resolve URL 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+            // 2020.10.16 14:42:33 Log        -  [Video Playback] Attempting to resolve URL 'http://storage.llss.io/yUKvv_nCpj0.mp4'
 
             if (string.Compare(line, offset, "Attempting to resolve URL '", 0, 27, StringComparison.Ordinal) != 0)
             {
@@ -470,8 +477,66 @@ namespace VRCX
             {
                 fileInfo.Name,
                 ConvertLogTimeToISO8601(line),
-                "video-play",
-                data
+                "video-change",
+                data,
+                playerRequest,
+                playerPlayer
+            });
+            playerPlayer = string.Empty;
+            playerRequest = string.Empty;
+
+            return true;
+        }
+
+        private bool ParseLogVideoBeep(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        {
+            // 2020.10.16 14:42:31 Log        -  [UdonSync] vrcw executing Beep at the behest of Natsumi-sama
+            // 2021.02.04 02:16:58 Log        -  [ǄǄǅǅǄǄǄǄǄǄǄǅǅǅǄǅǄǄǅǄǄǄǅǄǄǅǅǅǄǄǅǅǄǄǅǅǅǄǄǅǄǄǅǅǅǅǅ] vrcw executing Beep at the behest of Natsumi-sama
+
+            if (string.Compare(line, offset, "vrcw executing Beep at the behest of ", 0, 37, StringComparison.Ordinal) == 0)
+            {
+                var data = line.Substring(offset + 37);
+
+                playerRequest = playerPlayer;
+                playerPlayer = data;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool ParseLogSDK2VideoPlay(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        {
+            // 2021.04.23 13:12:25 Log        -  User Natsumi-sama added URL https://www.youtube.com/watch?v=dQw4w9WgXcQ
+
+            if (string.Compare(line, offset, "User ", 0, 5, StringComparison.Ordinal) != 0)
+            {
+                return false;
+            }
+
+            var pos = line.LastIndexOf(" added URL ");
+            if (pos < 0)
+            {
+                return false;
+            }
+
+            var playerPlayer = line.Substring(offset + 5, pos - (offset + 5));
+            var data = line.Substring(pos + 11);
+
+            if (logContext.LastVideoURL == data)
+            {
+                return false;
+            }
+            logContext.LastVideoURL = data;
+
+            AppendLog(new[]
+            {
+                fileInfo.Name,
+                ConvertLogTimeToISO8601(line),
+                "video-change",
+                data,
+                playerPlayer
             });
 
             return true;
