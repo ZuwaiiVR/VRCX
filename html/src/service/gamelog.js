@@ -36,8 +36,10 @@ function parseRawGameLog(dt, type, args) {
             gameLog.event = args[0];
             break;
 
-        case 'video-play':
+        case 'video-change':
             gameLog.videoURL = args[0];
+            gameLog.playerRequest = args[1];
+            gameLog.playerPlayer = args[2];
             break;
 
         default:

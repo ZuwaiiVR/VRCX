@@ -12,6 +12,7 @@ html
         link(rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto+Sans+JP|Noto+Sans+KR&display=swap")
         link(rel="stylesheet" href="vr.css")
     body
+        #vroverlay
         .x-app#x-app(v-if="appType === '1'" class="x-app-type")
             .x-container(style="flex:1")
                 .x-friend-list(ref="list" style="color:#aaa")
@@ -58,6 +59,13 @@ html
                                     span.extra
                                         span.time {{ feed.created_at | formatDate('HH:MI') }}
                                         location(:location="feed.data[0]" :hint="feed.data[1]")
+                            div(v-else-if="feed.type === 'VideoChange'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
+                                .detail
+                                    span.extra
+                                        span.time {{ feed.created_at | formatDate('HH:MI') }}
+                                        | 🎵 #[span(style="color: red;" v-text="feed.data.playerYeet")]
+                                        | #[span.name(v-text="feed.data.playerPlayer")]
+                                        | #[span(v-text="feed.data.videoName")]
                             div(v-else-if="feed.type === 'invite'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
                                 .detail
                                     span.extra
@@ -113,11 +121,12 @@ html
                                     span.extra
                                         span.time {{ feed.created_at | formatDate('HH:MI') }}
                                         | 🛑 #[span.name(v-text="feed.data")]
-                            div(v-else-if="feed.type === 'VideoPlay'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
+                            div(v-else class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
                                 .detail
                                     span.extra
                                         span.time {{ feed.created_at | formatDate('HH:MI') }}
-                                        | 🎵 #[span.name(v-text="feed.data")]
+                                        | test: #[span(v-text="feed.type")]
+                                        | #[span(v-text="feed.senderUsername")]
                     template(v-else)
                         template(v-for="feed in wristFeed")
                             .x-friend-item(v-if="feed.type === 'GPS'" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
@@ -160,6 +169,13 @@ html
                                     span.extra
                                         span.time {{ feed.created_at | formatDate('HH:MI') }}
                                         location(:location="feed.data[0]" :hint="feed.data[1]")
+                            div(v-else-if="feed.type === 'VideoChange'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
+                                .detail
+                                    span.extra
+                                        span.time {{ feed.created_at | formatDate('HH:MI') }}
+                                        | #[span(style="color: red;" v-text="feed.data.playerYeet")]
+                                        | #[span.name(v-text="feed.data.playerPlayer")] changed video to
+                                        | #[span(v-text="feed.data.videoName")]
                             div(v-else-if="feed.type === 'invite'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
                                 .detail
                                     span.extra
@@ -215,15 +231,10 @@ html
                                     span.extra
                                         span.time {{ feed.created_at | formatDate('HH:MI') }}
                                         | Event: #[span.name(v-text="feed.data")]
-                            div(v-else-if="feed.type === 'VideoPlay'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
-                                .detail
-                                    span.extra
-                                        span.time {{ feed.created_at | formatDate('HH:MI') }}
-                                        | Now playing: #[span.name(v-text="feed.data")]
             .x-containerbottom
                 div(style="display:flex;flex-direction:row")
                     template(v-if="devices.length")
-                        div(v-for="device in devices" style="flex:none;text-align:center;width:58px;height:74px")
+                        div(v-for="device in devices" style="flex:none;text-align:center;width:62px;height:82px")
                             template(v-if="device[0] === 'tracker'")
                                 img(v-if="device[1] !== 'connected'" src="images/tracker_status_off.png" style="width:32px;height:32px")
                                 img(v-else-if="device[2] < 20" src="images/tracker_status_ready_low.png" style="width:32px;height:32px")
@@ -261,10 +272,18 @@ html
                                 br
                                 span {{ device[2] }}%
             .x-containerbottom
+                span(style="float:right;padding-left:15px") {{ nowPlayingobj.videoProgressText }}
+                marquee-text {{ nowPlayingobj.videoID ? `${nowPlayingobj.videoID} : ` : ''}} {{ nowPlayingobj.videoName ? nowPlayingobj.videoName : ' ‎' }} {{ nowPlayingobj.playerPlayer ? `(${nowPlayingobj.playerPlayer}) ‎  ‎‎` : ' ‎' }}
+                #progress
                 template(v-if="lastLocation.date != 0")
-                    span(style="float:right") Timer: {{ lastLocationTimer }}
-                    span(style="display:inline-block") Players: {{ lastLocation.playerList.length }} 
-                    span(style="display:inline-block;font-weight:bold") {{ lastLocation.friendList.length !== 0 ? `‎‎‎‎‎‎‎‎‏‏‎ ‎(${lastLocation.friendList.length})` : ''}}
+                    template(v-if="config && config.minimalFeed")
+                        span(style="float:right") {{ lastLocationTimer }}
+                        span(style="display:inline-block") {{ lastLocation.playerList.length }} 
+                        span(style="display:inline-block;font-weight:bold") {{ lastLocation.friendList.length !== 0 ? `‎‎‎‎‎‎‎‎‏‏‎ ‎(${lastLocation.friendList.length})` : ''}}
+                    template(v-else)
+                        span(style="float:right") Timer: {{ lastLocationTimer }}
+                        span(style="display:inline-block") Players: {{ lastLocation.playerList.length }} 
+                        span(style="display:inline-block;font-weight:bold") {{ lastLocation.friendList.length !== 0 ? `‎‎‎‎‎‎‎‎‏‏‎ ‎(${lastLocation.friendList.length})` : ''}}
                 br
                 span(style="float:right") {{ currentTime | formatDate('YYYY-MM-DD HH:MI:SS AMPM') }}
                 span CPU {{ cpuUsage }}%

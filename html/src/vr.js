@@ -13,8 +13,20 @@ import {appVersion} from './constants.js';
 import sharedRepository from './repository/shared.js';
 import configRepository from './repository/config.js';
 import webApiService from './service/webapi.js';
+import ProgressBar from 'progressbar.js';
+import MarqueeText from 'vue-marquee-text-component';
+Vue.component('marquee-text', MarqueeText);
 
 speechSynthesis.getVoices();
+
+var bar = new ProgressBar.Circle(vroverlay, {
+  strokeWidth: 50,
+  easing: 'easeInOut',
+  duration: 500,
+  color: '#aaa',
+  trailWidth: 0,
+  svgStyle: null
+});
 
 (async function () {
     var $app = null;
@@ -23,7 +35,8 @@ speechSynthesis.getVoices();
         'AppApi',
         'WebApi',
         'SharedVariable',
-        'SQLite'
+        'SQLite',
+        'Discord'
     );
 
     await configRepository.init();
@@ -697,6 +710,13 @@ speechSynthesis.getVoices();
             currentUserStatus: null,
             cpuUsage: 0,
             config: {},
+            nowPlayingobj: {},
+            newPlayingobj: {
+                videoURL: '',
+                videoName: '',
+                videoVolume: '',
+                videoChangeTime: ''
+            },
             isGameRunning: false,
             isGameNoVR: false,
             lastLocation: {
@@ -810,6 +830,13 @@ speechSynthesis.getVoices();
         try {
             this.currentTime = new Date().toJSON();
             await this.updateVRConfigVars();
+
+            //Video Change
+            var wristFeed = sharedRepository.getArray('wristFeed');
+            if (typeof wristFeed !== 'undefined' && wristFeed.length > 0) {
+                this.updateSharedFeedVideo(wristFeed);
+            }
+
             if ((!this.config.hideDevicesFromFeed) && (this.appType === '1')) {
                 AppApi.GetVRDevices().then((devices) => {
                     devices.forEach((device) => {
@@ -886,7 +913,7 @@ speechSynthesis.getVoices();
                     message = noty.details[messageList[i]];
                 }
             }
-            if ((this.config.overlayNotifications) && (!this.isGameNoVR) && (this.isGameRunning)) {
+            if ((this.config.overlayNotifications) && (!this.isGameNoVR) && (this.isGameRunning) && (!this.config.xsNotifications)) {
                 var text = '';
                 switch (noty.type) {
                     case 'OnPlayerJoined':
@@ -943,9 +970,6 @@ speechSynthesis.getVoices();
                     case 'Event':
                         text = noty.data;
                         break;
-                    case 'VideoPlay':
-                        text = `<strong>Now playing:</strong> ${noty.data}`;
-                        break;
                     default:
                         break;
                 }
@@ -959,6 +983,135 @@ speechSynthesis.getVoices();
                     }).show();
                 }
             }
+        }
+    };
+
+    $app.methods.updateSharedFeedVideo = async function (feeds) {
+        this.nowPlayingobj.videoProgressText = '';
+        for (var i = 0; i < feeds.length; i++) {
+            var feed = feeds[i];
+            if (feed.type === "VideoChange") {
+                this.newPlayingobj = feed.data;
+                this.newPlayingobj.videoChangeTime = feed.created_at;
+                break;
+            }
+        }
+        if (this.newPlayingobj.videoURL != '') {
+            var percentage = 0;
+            var videoLength = Number(this.newPlayingobj.videoLength) + 10; //magic number
+            var currentTime = Date.now() / 1000;
+            var videoStartTime = videoLength + Date.parse(this.newPlayingobj.videoChangeTime) / 1000;
+            var videoProgress = Math.floor((videoStartTime - currentTime) * 100) / 100;
+            var L = API.parseLocation(this.lastLocation.location);
+            if ((!this.isGameRunning) || (L.worldId != 'wrld_f20326da-f1ac-45fc-a062-609723b097b1')) {
+                videoProgress = -60;
+            }
+            if (videoProgress > 0) {
+                function sec2time(timeInSeconds) {
+                    var pad = function(num, size) { return ('000' + num).slice(size * -1); },
+                    time = parseFloat(timeInSeconds).toFixed(3),
+                    hours = Math.floor(time / 60 / 60),
+                    minutes = Math.floor(time / 60) % 60,
+                    seconds = Math.floor(time - minutes * 60);
+                    var hoursOut = "";
+                    if (hours > "0") { hoursOut = pad(hours, 2) + ':' }
+                    return hoursOut + pad(minutes, 2) + ':' + pad(seconds, 2);
+                }
+                this.nowPlayingobj.videoProgressText = sec2time(videoProgress);
+                percentage = Math.floor((((videoLength - videoProgress) * 100) / videoLength) * 100) / 100;
+                if ((this.appType === '2') && (this.nowPlayingobj.videoName) && (configRepository.getBool('discordActive'))) {
+                    var requestedBy = '';
+                    if (this.nowPlayingobj.playerPlayer !== '') { requestedBy = 'Requested by: ' + this.nowPlayingobj.playerPlayer; }
+                    Discord.SetText('Video: ' + this.nowPlayingobj.videoName, requestedBy);
+                    Discord.SetAssets('pypy', `Instance time: ${this.lastLocationTimer}`, 'ayaya', 'https://github.com/Natsumi-sama/VRCX');
+                    Discord.SetTimestamps(Date.now(), Date.parse(this.nowPlayingobj.videoChangeTime) + Number(videoLength) * 1000);
+                }
+            }
+            else {
+                this.newPlayingobj = {
+                    videoURL: '',
+                    videoName: '',
+                    videoVolume: ''
+                };
+            }
+            if (videoProgress <= -60) {
+                Discord.SetActive(false);
+                Discord.SetText('', '');
+            }
+        }
+        if (this.nowPlayingobj.videoURL !== this.newPlayingobj.videoURL)  {
+            this.nowPlayingobj = this.newPlayingobj;
+            if (this.appType === '2') {
+                if (this.nowPlayingobj.videoURL != '') {
+                    if (configRepository.getBool('VRCX_xsNotifications')) {
+                        var timeout = parseInt(this.config.notificationTimeout) / 1000;
+                        var message = this.newPlayingobj.videoName;
+                        if (this.newPlayingobj.playerPlayer !== '') {
+                            message = (`${message} (${this.newPlayingobj.playerPlayer})`);
+                        }
+                        AppApi.XSNotification('VRCX', message, timeout, false);
+                    } else if (configRepository.getBool('VRCX_videoNotification')) {
+                        if (this.newPlayingobj.playerPlayer !== '') {
+                            new Noty({
+                                type: 'alert',
+                                theme: this.config.notificationTheme,
+                                timeout: this.config.notificationTimeout,
+                                layout: this.config.notificationPosition,
+                                text: 'Requested by: ' + this.newPlayingobj.playerPlayer
+                            }).show();
+                        }
+                        new Noty({
+                            type: 'alert',
+                            theme: this.config.notificationTheme,
+                            timeout: this.config.notificationTimeout,
+                            layout: this.config.notificationPosition,
+                            text: this.newPlayingobj.videoName
+                        }).show();
+                    }
+                    if ((this.config.notificationTTS === 'Always') ||
+                        ((this.config.notificationTTS === 'Outside VR') && ((this.isGameNoVR) || (!this.isGameRunning))) ||
+                        ((this.config.notificationTTS === 'Inside VR') && (!this.isGameNoVR) && (this.isGameRunning)) ||
+                        ((this.config.notificationTTS === 'Game Closed') && (!this.isGameRunning)) ||
+                        ((this.config.notificationTTS === 'Desktop Mode') && (this.isGameNoVR) && (this.isGameRunning))) {
+                        var ttsURL = '';
+                        if (this.newPlayingobj.videoID == 'YouTube') { ttsURL = 'URL' }
+                        var ttsRequestedBy = '';
+                        if (this.newPlayingobj.playerPlayer !== '') { ttsRequestedBy = 'Requested by ' + this.newPlayingobj.playerPlayer; }
+                        this.speak(`now playing ${ttsURL} ${this.newPlayingobj.videoName} ${ttsRequestedBy}`);
+                    }
+                    if (configRepository.getBool('discordActive')) {
+                        Discord.SetActive(true);
+                    }
+                }
+                if (configRepository.getBool('VRCX_volumeNormalize') == true) {
+                    if (this.newPlayingobj.videoVolume != '') {
+                        var mindB = "-10.0";
+                        var maxdB = "-24.0";
+                        var minVolume = "30";
+                        var dBpercenatge = ((this.newPlayingobj.videoVolume - mindB) * 100) / (maxdB - mindB);
+                        if (dBpercenatge > 100) { dBpercenatge = 100; }
+                        else if (dBpercenatge < 0) { dBpercenatge = 0; }
+                        var newPercenatge = ((minVolume / 43) * dBpercenatge) + Number(minVolume);
+                        var mixerVolume = newPercenatge / 100.0;
+                        var mixerVolumeFloat = mixerVolume.toFixed(2);
+                    }
+                    else {
+                        var mixerVolumeFloat = "0.50";
+                    }
+                    AppApi.ChangeVolume(mixerVolumeFloat);
+                }
+            }
+        }
+        if (this.appType === '2') {
+            if (configRepository.getBool('VRCX_progressPie') == true) {
+                bar.animate(parseFloat(percentage) / 100.0);
+            }
+            else {
+                bar.animate(0);
+            }
+        }
+        else {
+            document.getElementById("progress").style.width = percentage + "%";
         }
     };
 

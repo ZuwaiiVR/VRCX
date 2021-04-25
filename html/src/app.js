@@ -15,6 +15,12 @@ Vue.component('v-swatches', VSwatches);
 import '../node_modules/vue-swatches/dist/vue-swatches.css';
 import ElementUI from 'element-ui';
 import locale from 'element-ui/lib/locale/lang/en';
+import copy from 'copy-to-clipboard';
+import PyPyVideos from './PyPyVideos.json';
+var PyPyVideosTable = JSON.parse(atob(PyPyVideos.json));
+
+var playerPlayer = '';
+var playerRequest = '';
 
 import {appVersion} from './constants.js';
 import sharedRepository from './repository/shared.js';
@@ -68,9 +74,9 @@ speechSynthesis.getVoices();
 
     document.addEventListener('keyup', function (e) {
         if (e.ctrlKey) {
-            if (e.key === 'I') {
+            if (e.shiftKey && e.code === 'KeyI') {
                 AppApi.ShowDevTools();
-            } else if (e.key === 'r') {
+            } else if (e.code === 'KeyR') {
                 location.reload();
             }
         }
@@ -673,7 +679,7 @@ speechSynthesis.getVoices();
     };
 
     Vue.component('launch', {
-        template: '<el-button @click="confirm" size="mini" icon="el-icon-link" circle></el-button>',
+        template: '<el-button @click="confirm" size="mini" icon="el-icon-info" circle></el-button>',
         props: {
             location: String
         },
@@ -1124,6 +1130,7 @@ speechSynthesis.getVoices();
                 ref
             });
         }
+
         sharedRepository.setString('current_user_status', ref.status);
         return ref;
     };
@@ -2654,17 +2661,6 @@ speechSynthesis.getVoices();
         }
     });
 
-    API.$on('FAVORITE:FRIEND:LIST', function (args) {
-        for (var json of args.json) {
-            this.$emit('USER', {
-                json,
-                params: {
-                    userId: json.id
-                }
-            });
-        }
-    });
-
     API.$on('FAVORITE:WORLD:LIST', function (args) {
         for (var json of args.json) {
             if (json.id === '???') {
@@ -2755,7 +2751,6 @@ speechSynthesis.getVoices();
 
     API.refreshFavoriteItems = function () {
         var types = {
-            // 'friend': [0, 'getFavoriteFriends'],
             'world': [0, 'getFavoriteWorlds'],
             'avatar': [0, 'getFavoriteAvatars']
         };
@@ -3156,26 +3151,6 @@ speechSynthesis.getVoices();
             offset: number
         }
     */
-    API.getFavoriteFriends = function (params) {
-        return this.call('auth/user/friends/favorite', {
-            method: 'GET',
-            params
-        }).then((json) => {
-            var args = {
-                json,
-                params
-            };
-            this.$emit('FAVORITE:FRIEND:LIST', args);
-            return args;
-        });
-    };
-
-    /*
-        params: {
-            n: number,
-            offset: number
-        }
-    */
     API.getFavoriteWorlds = function (params) {
         return this.call('worlds/favorites', {
             method: 'GET',
@@ -3232,8 +3207,9 @@ speechSynthesis.getVoices();
 
     API.$on('PIPELINE', function (args) {
         var { type, content } = args.json;
-        delete content.state;
-        delete content.status;
+        if (typeof content.user !== 'undefined') {
+            delete content.user.state;
+        }
         switch (type) {
             case 'notification':
                 this.$emit('NOTIFICATION', {
@@ -3680,7 +3656,7 @@ speechSynthesis.getVoices();
 
     $app.methods.checkAppVersion = async function () {
         var response = await webApiService.execute({
-            url: 'https://api.github.com/repos/pypy-vrc/VRCX/releases/latest',
+            url: 'https://api.github.com/repos/natsumi-sama/VRCX/releases/latest',
             method: 'GET',
             headers: {
                 'User-Agent': 'VRCX'
@@ -3697,7 +3673,7 @@ speechSynthesis.getVoices();
                     text: `Update available!!<br>${this.latestAppVersion}`,
                     timeout: 60000,
                     callbacks: {
-                        onClick: () => AppApi.OpenLink('https://github.com/pypy-vrc/VRCX/releases')
+                        onClick: () => AppApi.OpenLink('https://github.com/natsumi-sama/VRCX/releases')
                     }
                 }).show();
                 this.notifyMenu('settings');
@@ -3711,7 +3687,7 @@ speechSynthesis.getVoices();
         try {
             if (API.isLoggedIn === true) {
                 if (--this.nextCurrentUserRefresh <= 0) {
-                    this.nextCurrentUserRefresh = 120;  // 1min
+                    this.nextCurrentUserRefresh = 60;  // 30secs
                     API.getCurrentUser().catch((err1) => {
                         throw err1;
                     });
@@ -3723,10 +3699,10 @@ speechSynthesis.getVoices();
                 AppApi.CheckGameRunning().then(([isGameRunning, isGameNoVR]) => {
                     if (isGameRunning !== this.isGameRunning) {
                         this.isGameRunning = isGameRunning;
-                        Discord.SetTimestamps(Date.now(), 0);
+                        //Discord.SetTimestamps(Date.now(), 0);
                     }
                     this.isGameNoVR = isGameNoVR;
-                    this.updateDiscord();
+                    //this.updateDiscord();
                     this.updateOpenVR();
                 });
             }
@@ -3963,6 +3939,15 @@ speechSynthesis.getVoices();
                 (ctx.type === 'PortalSpawn')) {
                 for (var ref of API.cachedUsers.values()) {
                     if (ref.displayName === ctx.data) {
+                        isFriend = this.friends.has(ref.id);
+                        isFavorite = API.cachedFavoritesByObjectId.has(ref.id);
+                        break;
+                    }
+                }
+            }
+            if ((ctx.type === 'VideoChange') && (ctx.data.playerPlayer)) {
+                for (var ref of API.cachedUsers.values()) {
+                    if (ref.displayName === ctx.data.playerPlayer) {
                         isFriend = this.friends.has(ref.id);
                         isFavorite = API.cachedFavoritesByObjectId.has(ref.id);
                         break;
@@ -4405,16 +4390,13 @@ speechSynthesis.getVoices();
             case 'Event':
                 this.speak(noty.data);
                 break;
-            case 'VideoPlay':
-                this.speak(`Now playing: ${noty.data}`);
-                break;
             default:
                 break;
         }
     };
 
     $app.methods.displayXSNotification = async function (noty, message, image) {
-        var timeout = parseInt(this.notificationTimeout) / 1000;
+        var timeout = parseInt(parseInt(this.notificationTimeout) / 1000);
         switch (noty.type) {
             case 'OnPlayerJoined':
                 AppApi.XSNotification('VRCX', `${noty.data} has joined`, timeout, image);
@@ -4469,9 +4451,6 @@ speechSynthesis.getVoices();
                 break;
             case 'Event':
                 AppApi.XSNotification('VRCX', noty.data, timeout, image);
-                break;
-            case 'VideoPlay':
-                AppApi.XSNotification('VRCX', `Now playing: ${noty.data}`, timeout, image);
                 break;
             default:
                 break;
@@ -4533,9 +4512,6 @@ speechSynthesis.getVoices();
                 break;
             case 'Event':
                 AppApi.DesktopNotification('Event', noty.data, image);
-                break;
-            case 'VideoPlay':
-                AppApi.DesktopNotification('Now playing', noty.data, image);
                 break;
             default:
                 break;
@@ -5594,7 +5570,7 @@ speechSynthesis.getVoices();
         }, 1);
     };
 
-    $app.methods.addFeed = function (type, ref, extra) {
+    $app.methods.addFeed = async function (type, ref, extra) {
         this.feedTable.data.push({
             created_at: new Date().toJSON(),
             type,
@@ -5602,6 +5578,26 @@ speechSynthesis.getVoices();
             displayName: ref.displayName,
             ...extra
         });
+         if (configRepository.getBool('VRCX_SQLOutput') == true) {
+       // console.log("Writing SQL");
+        switch(type){
+            case "GPS":
+            AppApi.WriteSQlog(0,new Date().toDateString(),new Date().toTimeString(),type,ref.displayName,await this.displayLocation(extra.location[0].toString()),ref.id,extra.location[0].toString());
+            break;
+            case "Avatar":
+            AppApi.WriteSQlog(0,new Date().toDateString(),new Date().toTimeString(),type,ref.displayName,extra.avatar[0].currentAvatarImageUrl,ref.id,"");
+            break;
+            case "Status":
+            AppApi.WriteSQlog(0,new Date().toDateString(),new Date().toTimeString(),type,ref.displayName,extra.status[0].status + " > " + extra.status[0].statusDescription,ref.id,"");
+            break;
+            case "Online":
+            AppApi.WriteSQlog(0,new Date().toDateString(),new Date().toTimeString(),type,ref.displayName,"Online",ref.id,"");
+            break;
+            case "Offline":
+            AppApi.WriteSQlog(0,new Date().toDateString(),new Date().toTimeString(),type,ref.displayName,"Offline",ref.id,"");
+            break;
+        }
+    }
         this.sweepFeed();
         this.saveFeed();
         this.updateSharedFeed(false);
@@ -5644,7 +5640,7 @@ speechSynthesis.getVoices();
     $app.methods.sweepFeed = function () {
         var { data } = this.feedTable;
         // 로그는 3일까지만 남김
-        var limit = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toJSON();
+        var limit = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toJSON();
         var i = 0;
         var j = data.length;
         while (i < j &&
@@ -5673,6 +5669,10 @@ speechSynthesis.getVoices();
     var saveDiscordOption = function () {
         configRepository.setBool('discordActive', this.discordActive);
         configRepository.setBool('discordInstance', this.discordInstance);
+        if (!this.discordActive) {
+            Discord.SetText('', '');
+            Discord.SetActive(false);
+        }
     };
     $app.watch.discordActive = saveDiscordOption;
     $app.watch.discordInstance = saveDiscordOption;
@@ -5750,6 +5750,52 @@ speechSynthesis.getVoices();
     };
 
     $app.methods.updateGameLog = async function () {
+        function convert_youtube_time(duration) {
+            var a = duration.match(/\d+/g);
+            if (duration.indexOf('M') >= 0 && duration.indexOf('H') == -1 && duration.indexOf('S') == -1) {
+                a = [0, a[0], 0];
+            }
+            if (duration.indexOf('H') >= 0 && duration.indexOf('M') == -1) {
+                a = [a[0], 0, a[1]];
+            }
+            if (duration.indexOf('H') >= 0 && duration.indexOf('M') == -1 && duration.indexOf('S') == -1) {
+                a = [a[0], 0, 0];
+            }
+            duration = 0;
+            if (a.length == 3) {
+                duration = duration + parseInt(a[0]) * 3600;
+                duration = duration + parseInt(a[1]) * 60;
+                duration = duration + parseInt(a[2]);
+            }
+            if (a.length == 2) {
+                duration = duration + parseInt(a[0]) * 60;
+                duration = duration + parseInt(a[1]);
+            }
+            if (a.length == 1) {
+                duration = duration + parseInt(a[0]);
+            }
+            return duration
+        }
+
+        async function youtubeAPI(videoID) {
+            var youtubeAPIKey = '';
+            if (!youtubeAPIKey) {
+                console.log('youtubeAPIKey is missing, add it to use this function');
+                return;
+            }
+            var response = await webApiService.execute({
+                url: "https://www.googleapis.com/youtube/v3/videos?id=" + videoID + "&part=snippet,contentDetails&key=" + youtubeAPIKey,
+                method: 'GET'
+            });
+            var youtubeAPIGet = response.data;
+            var youtubeAPIResult = JSON.parse(youtubeAPIGet);
+            if (youtubeAPIResult.pageInfo.totalResults !== 0) {
+                videoobj.videoName = youtubeAPIResult.items[0].snippet.title;
+                videoobj.videoLength = convert_youtube_time(youtubeAPIResult.items[0].contentDetails.duration);
+                videoobj.videoID = 'YouTube';
+            }
+        }
+
         for (var gameLog of await gameLogService.poll()) {
             var tableData = null;
 
@@ -5803,36 +5849,111 @@ speechSynthesis.getVoices();
                     };
                     break;
 
+
                 case 'event':
                     tableData = {
                         created_at: gameLog.dt,
                         type: 'Event',
                         data: gameLog.event
+
                     };
                     break;
 
-                case 'video-play':
+                case 'video-change':
+                    var videoobj = {};
+                    videoobj.videoURL = gameLog.videoURL;
+                    videoobj.playerRequest = gameLog.playerRequest;
+                    videoobj.playerPlayer = gameLog.playerPlayer;
+                    videoobj.videoName = videoobj.videoURL;
+                    videoobj.videoID = '';
+                    videoobj.playerYeet = '';
+                    videoobj.videoVolume = '';
+                    if ((videoobj.playerPlayer != '') && (videoobj.playerRequest != '') && (videoobj.playerPlayer != videoobj.playerRequest)) {
+                        videoobj.playerYeet = videoobj.playerPlayer;
+                        videoobj.playerPlayer = videoobj.playerRequest;
+                    }
+                    if (videoobj.videoURL.substring(0, 23) === "http://storage.llss.io/") {
+                        videoobj.fileName = videoobj.videoURL.substring(23);
+                        for (var video of PyPyVideosTable) {
+                            if (video.File_Name === videoobj.fileName) {
+                                videoobj.videoName = video.Video_Name;
+                                videoobj.videoID = video.Video_ID;
+                                videoobj.videoLength = video.Video_Length;
+                                videoobj.videoVolume = video.Video_Volume;
+                                break;
+                            }
+                        }
+                        if (videoobj.videoID == '') {
+                            var videoID = videoobj.videoURL.substring(23, 34);
+                            await youtubeAPI(videoID);
+                        }
+                    }
+                    else if ((videoobj.videoURL.substring(0, 29) === "https://www.youtube.com/watch") && (this.youtubeAPI)) {
+                        var videoParams = videoobj.videoURL.substring(29);
+                        var urlParams = new URLSearchParams(videoParams);
+                        var videoID = urlParams.get('v');
+                        await youtubeAPI(videoID);
+                    }
+                    else if ((videoobj.videoURL.substring(0, 17) === "https://youtu.be/") && (this.youtubeAPI)) {
+                        var videoID = videoobj.videoURL.substring(17, 28);
+                        await youtubeAPI(videoID);
+                    }
+
                     tableData = {
                         created_at: gameLog.dt,
-                        type: 'VideoPlay',
-                        data: gameLog.videoURL
+                        type: 'VideoChange',
+                        data: videoobj
                     };
                     break;
 
                 default:
                     break;
             }
+            if (configRepository.getBool('VRCX_SQLOutput') == true && this.appInit == true){
+                switch (gameLog.type) {
+                    case 'location':
+                       AppApi.WriteSQlog(1,new Date(gameLog.dt).toDateString(),new Date(gameLog.dt).toTimeString(),gameLog.type,"",gameLog.worldName,"","");
+                        break;
 
+                    case 'player-joined':
+                        AppApi.WriteSQlog(1,new Date(gameLog.dt).toDateString(), new Date(gameLog.dt).toTimeString(),gameLog.type,"",gameLog.userDisplayName,"","");
+                        break;
+
+                    case 'player-left':
+                        AppApi.WriteSQlog(1,new Date(gameLog.dt).toDateString(),new Date(gameLog.dt).toTimeString(),gameLog.type,"",gameLog.userDisplayName,"","");
+                        break;
+
+                    case 'notification':
+                       AppApi.WriteSQlog(1,new Date(gameLog.dt).toDateString(),new Date(gameLog.dt).toTimeString() ,gameLog.type,"",gameLog.json,"","");
+                        break;
+
+                    case 'portal-spawn':
+                       AppApi.WriteSQlog(1,new Date(gameLog.dt).toDateString(),new Date(gameLog.dt).toTimeString() ,gameLog.type,"",gameLog.userDisplayName,"","");
+                        break;
+
+
+                    case 'event':
+                        AppApi.WriteSQlog(1,new Date(gameLog.dt).toDateString(),new Date(gameLog.dt).toTimeString() ,gameLog.type,"",gameLog.event,"","");
+                        break;
+
+                    case 'video-change':    
+                        AppApi.WriteSQlog(1,new Date(gameLog.dt).toDateString(),new Date(gameLog.dt).toTimeString() ,gameLog.type,"",videoobj.videoID + " " + videoobj.videoName,"","");
+                        break;
+                    default:
+                        break;
+                }
+            }
             if (tableData !== null) {
                 this.gameLogTable.data.push(tableData);
             }
+            
         }
     };
 
     $app.methods.sweepGameLog = function () {
         var { data } = this.gameLogTable;
         // 로그는 7일까지만 남김
-        var limit = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toJSON();
+        var limit = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toJSON();
         var i = 0;
         var j = data.length;
         while (i < j &&
@@ -6979,7 +7100,7 @@ speechSynthesis.getVoices();
                 PortalSpawn: 'Everyone',
                 ItemDestroy: 'Off',
                 Event: 'On',
-                VideoPlay: 'On'
+                VideoChange: 'On'
             },
             wrist: {
                 Location: 'On',
@@ -7002,7 +7123,7 @@ speechSynthesis.getVoices();
                 PortalSpawn: 'Everyone',
                 ItemDestroy: 'Everyone',
                 Event: 'On',
-                VideoPlay: 'On'
+                VideoChange: 'On'
             }
         };
         configRepository.setString('sharedFeedFilters', JSON.stringify(sharedFeedFilters));
@@ -7137,6 +7258,27 @@ speechSynthesis.getVoices();
         this.updateVRConfigVars();
     };
 
+    $app.data.progressPie = configRepository.getBool('VRCX_progressPie');
+    $app.data.videoNotification = configRepository.getBool('VRCX_videoNotification');
+    $app.data.volumeNormalize = configRepository.getBool('VRCX_volumeNormalize');
+    $app.data.youtubeAPI = configRepository.getBool('VRCX_youtubeAPI');
+    var saveVRCXPyPyOption = function () {
+        configRepository.setBool('VRCX_progressPie', this.progressPie);
+        configRepository.setBool('VRCX_videoNotification', this.videoNotification);
+        configRepository.setBool('VRCX_volumeNormalize', this.volumeNormalize);
+        configRepository.setBool('VRCX_youtubeAPI', this.youtubeAPI);
+        this.updateVRConfigVars();
+    };
+    $app.data.SQLOutput = configRepository.getBool('VRCX_SQLOutput');
+    var saveVRCXSQLOutput = function () {
+    configRepository.setBool('VRCX_SQLOutput', this.SQLOutput);
+    this.updateVRConfigVars();
+    };
+    $app.watch.progressPie = saveVRCXPyPyOption;
+    $app.watch.videoNotification = saveVRCXPyPyOption;
+    $app.watch.volumeNormalize = saveVRCXPyPyOption;
+    $app.watch.youtubeAPI = saveVRCXPyPyOption;
+    $app.watch.SQLOutput = saveVRCXSQLOutput;
     sharedRepository.setBool('is_game_running', false);
     var isGameRunningStateChange = function () {
         sharedRepository.setBool('is_game_running', this.isGameRunning);
@@ -7178,6 +7320,7 @@ speechSynthesis.getVoices();
             notificationTTS: this.notificationTTS,
             notificationTTSVoice: this.notificationTTSVoice,
             overlayNotifications: this.overlayNotifications,
+            xsNotifications: this.xsNotifications,
             hideDevicesFromFeed: this.hideDevicesFromFeed,
             minimalFeed: this.minimalFeed,
             displayVRCPlusIconsAsAvatar: this.displayVRCPlusIconsAsAvatar,
@@ -7496,6 +7639,7 @@ speechSynthesis.getVoices();
         $avatarInfo: {
             ownerId: '',
             avatarName: '',
+            fileCreatedAt: ''
         }
     };
 
@@ -7742,9 +7886,13 @@ speechSynthesis.getVoices();
                     API.getUser(args.params);
                 }
                 this.getAvatarName(args);
-                if (D.ref.$location.worldId) {
+                var L = API.parseLocation(D.ref.location);
+                if ((L.worldId) &&
+                    (this.lastLocation.location !== L.tag) &&
+                    ((L.accessType === 'public') ||
+                    (this.friends.has(L.userId)))) {
                     API.getWorld({
-                        worldId: D.ref.$location.worldId
+                        worldId: L.worldId
                     });
                 }
             }
@@ -7918,12 +8066,15 @@ speechSynthesis.getVoices();
         });
     };
 
-    $app.methods.refreshUserDialogAvatars = function () {
+    $app.methods.refreshUserDialogAvatars = function (fileId) {
         var D = this.userDialog;
         if (D.isAvatarsLoading) {
             return;
         }
         D.isAvatarsLoading = true;
+        if (fileId) {
+            D.loading = true;
+        }
         var params = {
             n: 50,
             offset: 0,
@@ -7954,6 +8105,19 @@ speechSynthesis.getVoices();
                 var array = Array.from(map.values());
                 this.setUserDialogAvatars(array);
                 D.isAvatarsLoading = false;
+                if (fileId) {
+                    D.loading = false;
+                    for (var ref of array) {
+                        if (extractFileId(ref.imageUrl) === fileId) {
+                            this.showAvatarDialog(ref.id);
+                            return;
+                        }
+                    }
+                    this.$message({
+                        message: 'Own avatar not found',
+                        type: 'error'
+                    });
+                }
             }
         });
     };
@@ -8098,43 +8262,7 @@ speechSynthesis.getVoices();
             });
         } else if (command === 'Show Avatar Author') {
             var { currentAvatarImageUrl } = D.ref;
-            for (var ref of API.cachedAvatars.values()) {
-                if (ref.imageUrl === currentAvatarImageUrl) {
-                    this.showAvatarDialog(ref.id);
-                    return;
-                }
-            }
-            var fileId = extractFileId(currentAvatarImageUrl);
-            if (fileId) {
-                if (API.cachedAvatarNames.has(fileId)) {
-                    var { ownerId } = API.cachedAvatarNames.get(fileId);
-                    if (ownerId === D.id) {
-                        this.$message({
-                            message: 'It\'s personal (own) avatar',
-                            type: 'warning'
-                        });
-                        return;
-                    }
-                    this.showUserDialog(ownerId);
-                } else {
-                    API.getAvatarImages({fileId}).then((args) => {
-                        var ownerId = args.json.ownerId;
-                        if (ownerId === D.id) {
-                            this.$message({
-                                message: 'It\'s personal (own) avatar',
-                                    type: 'warning'
-                                });
-                            return;
-                        }
-                        this.showUserDialog(ownerId);
-                    });
-                }
-            } else {
-                this.$message({
-                    message: 'Sorry, the author is unknown',
-                    type: 'error'
-                });
-            }
+            this.showAvatarAuthorDialog(D.id, currentAvatarImageUrl)
         } else if (command === 'Show Fallback Avatar Details') {
             var { fallbackAvatar } = D.ref;
             if (fallbackAvatar) {
@@ -8542,12 +8670,13 @@ speechSynthesis.getVoices();
             return;
         }
         D.ref = args.ref;
-        if (D.fileSize === 'Loading') {
+        if (D.fileSize === 'Unknown') {
             var id = extractFileId(args.ref.assetUrl);
             if (id) {
+                D.fileSize = 'Loading';
                 this.call(`file/${id}`).then((json) => {
                     var ref = json.versions[json.versions.length - 1];
-                    D.fileCreatedAt = ref.created_at;
+                    D.ref.created_at = ref.created_at;
                     D.fileSize = `${(ref.file.sizeInBytes / 1048576).toFixed(2)} MiB`;
                 });
             }
@@ -8579,8 +8708,7 @@ speechSynthesis.getVoices();
         var D = this.avatarDialog;
         D.id = avatarId;
         D.treeData = [];
-        D.fileCreatedAt = '';
-        D.fileSize = 'Loading';
+        D.fileSize = 'Unknown';
         D.visible = true;
         D.loading = true;
         API.getCachedAvatar({
@@ -8590,12 +8718,33 @@ speechSynthesis.getVoices();
             D.visible = false;
             throw err;
         }).then((args) => {
-            if (D.id === args.ref.id) {
+            if ((D.visible) && (D.id === args.ref.id)) {
                 D.loading = false;
                 D.ref = args.ref;
                 D.isFavorite = API.cachedFavoritesByObjectId.has(D.ref.id);
-                if (args.cache) {
+                if ((args.cache) && (D.ref.authorId === API.currentUser.id)) {
                     API.getAvatar(args.params);
+                } else {
+                    var id = extractFileId(args.ref.assetUrl);
+                    var fileId = extractFileId(D.ref.imageUrl);
+                    if (id) {
+                        D.fileSize = 'Loading';
+                        API.call(`file/${id}`).then((json) => {
+                            var ref = json.versions[json.versions.length - 1];
+                            D.ref.created_at = ref.created_at;
+                            D.fileSize = `${(ref.file.sizeInBytes / 1048576).toFixed(2)} MiB`;
+                        });
+                    } else if ((fileId) && (!D.ref.created_at)) {
+                        if (API.cachedAvatarNames.has(fileId)) {
+                            var avatarInfo = API.cachedAvatarNames.get(fileId);
+                            D.ref.created_at = avatarInfo.fileCreatedAt;
+                        } else {
+                            API.getAvatarImages({fileId}).then((args) => {
+                                var avatarInfo = this.storeAvatarImage(args);
+                                D.ref.created_at = avatarInfo.fileCreatedAt;
+                            });
+                        }
+                    }
                 }
             }
             return args;
@@ -8709,19 +8858,33 @@ speechSynthesis.getVoices();
     };
 
     $app.methods.showAvatarAuthorDialog = function (refUserId, currentAvatarImageUrl) {
+        var fileId = extractFileId(currentAvatarImageUrl);
+        if (!fileId) {
+            this.$message({
+                message: 'Sorry, the author is unknown',
+                type: 'error'
+            });
+            return;
+        }
+        if ((refUserId === API.currentUser.id) && (API.cachedAvatars.has(API.currentUser.currentAvatar))) {
+            this.showAvatarDialog(API.currentUser.currentAvatar);
+            return;
+        }
         for (var ref of API.cachedAvatars.values()) {
-            if (ref.imageUrl === currentAvatarImageUrl) {
+            if (extractFileId(ref.imageUrl) === fileId) {
                 this.showAvatarDialog(ref.id);
                 return;
             }
         }
-        var fileId = extractFileId(currentAvatarImageUrl);
-        if (fileId) {
-            if (API.cachedAvatarNames.has(fileId)) {
-                var { ownerId } = API.cachedAvatarNames.get(fileId);
-                if (ownerId === refUserId) {
-                    this.$message({
-                        message: 'It\'s personal (own) avatar',
+        if (API.cachedAvatarNames.has(fileId)) {
+            var { ownerId } = API.cachedAvatarNames.get(fileId);
+            if (ownerId === API.currentUser.id) {
+                this.refreshUserDialogAvatars(fileId);
+                return;
+            }
+            if (ownerId === refUserId) {
+                this.$message({
+                    message: 'It\'s personal (own) avatar',
                         type: 'warning'
                     });
                     return;
@@ -8737,13 +8900,7 @@ speechSynthesis.getVoices();
                             });
                         return;
                     }
-                    this.showUserDialog(ownerId);
-                });
-            }
-        } else {
-            this.$message({
-                message: 'Sorry, the author is unknown',
-                type: 'error'
+                this.showUserDialog(ownerId);
             });
         }
     };
@@ -9252,7 +9409,39 @@ speechSynthesis.getVoices();
         D.visible = false;
     };
 
-    // App: VRCPlus Icons
+    $app.methods.copyInstanceUrl = function (URL) {
+        copy(URL);
+        this.$message({
+            message: 'URL copied to Clipboard',
+            type: 'success'
+        });
+        this.launchDialog.visible = false;
+        this.newInstanceDialog.visible = false;
+    };
+
+    $app.methods.copyUrl = function (URL) {
+        var L = API.parseLocation(URL);
+        if (L.instanceId) {
+            var urlOut = `https://vrchat.net/launch?worldId=${encodeURIComponent(L.worldId)}&instanceId=${encodeURIComponent(L.instanceId)}`;
+        } else {
+            var urlOut = `https://vrchat.net/launch?worldId=${encodeURIComponent(L.worldId)}`;
+        }
+        copy(urlOut);
+        new Noty({
+            type: 'success',
+            text: 'instance URL copied to clipboard'
+        }).show();
+    };
+
+    $app.methods.copyUrlInstanceCheck = function (URL) {
+        var L = API.parseLocation(URL);
+        if (L.isOffline ||
+            L.isPrivate ||
+            L.worldId === '') {
+            return false;
+        }
+        return true;
+    };
 
     API.$on('LOGIN', function () {
         $app.VRCPlusIconsTable = {};
@@ -10703,6 +10892,9 @@ speechSynthesis.getVoices();
     });
 
     $app.methods.storeAvatarImage = function (args) {
+        var refCreatedAt = args.json.versions[0];
+        var fileCreatedAt = refCreatedAt.created_at;
+        var ref = args.json.versions[args.json.versions.length - 1];
         var fileId = args.params.fileId;
         var avatarName = '';
         var imageName = args.json.name;
@@ -10713,7 +10905,8 @@ speechSynthesis.getVoices();
         var ownerId = args.json.ownerId;
         var avatarInfo = {
             ownerId,
-            avatarName
+            avatarName,
+            fileCreatedAt
         };
         API.cachedAvatarNames.set(fileId, avatarInfo);
         return avatarInfo;
