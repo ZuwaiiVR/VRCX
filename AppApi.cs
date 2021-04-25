@@ -19,6 +19,7 @@ using Windows.Data.Xml.Dom;
 using librsync.net;
 using System.Net.Sockets;
 using System.Text.Json.Serialization;
+using System.Data.SQLite;
 
 namespace VRCX
 {
@@ -31,6 +32,54 @@ namespace VRCX
             Instance = new AppApi();
         }
 
+        public void ChangeVolume(string Volume)
+        {
+            ProcessStartInfo Stuff = new ProcessStartInfo()
+            {
+                FileName = Path.Combine(Program.BaseDirectory, "nircmd.exe"),
+                Arguments = $"setappvolume VRChat.exe {Volume}"
+            };
+            Process.Start(Stuff);
+        }
+        public bool CheckSQLlog()
+        {
+            string sqlcon = @"URI=file:.\log.db";
+            return File.Exists(sqlcon);
+        }
+        public void WriteSQlog(int logtype, string date, string time, string type, string user, string detail, string userid, string worldid)
+        {
+            //log type 0:Feedlog 1:Gamelog
+            try
+            {
+                string sqcon = @"URI=file:.\log.db";
+                var sqlcon = new SQLiteConnection(sqcon);
+                sqlcon.Open();
+                var cmd = new SQLiteCommand(sqlcon);
+                cmd.CommandText = @"CREATE TABLE IF NOT EXISTS Feedlog(id INTEGER PRIMARY KEY,Date TEXT,Time TEXT,Type TEXT,User TEXT,Detail TEXT,UserID TEXT,WorldID TEXT)";
+                cmd.ExecuteNonQuery();
+                cmd.CommandText = @"CREATE TABLE IF NOT EXISTS Gamelog(id INTEGER PRIMARY KEY,Date TEXT,Time TEXT,Type TEXT,Detail TEXT)";
+                cmd.ExecuteNonQuery();
+
+                string c_detail = detail.Replace("'", "''");
+
+                switch (logtype)
+                {
+                    case 0:
+                        cmd.CommandText = "INSERT INTO Feedlog(Date, Time, Type,User,Detail,UserID,WorldID) VALUES('" + date + "','" + time + "','" + type + "','" + user + "','" + c_detail + "','" + userid + "','" + worldid + "')";
+                        cmd.ExecuteNonQuery();
+                        break;
+                    case 1:
+                        cmd.CommandText = "INSERT INTO Gamelog(Date, Time, Type,Detail) VALUES('" + date + "','" + time + "','" + type + "','" + c_detail + "')";
+                        cmd.ExecuteNonQuery();
+                        break;
+                }
+                sqlcon.Close();
+            }
+            catch
+            {
+                //errors goes here..
+            }
+        }
         public string MD5File(string Blob)
         {
             byte[] fileData = Convert.FromBase64CharArray(Blob.ToCharArray(), 0, Blob.Length);
@@ -118,7 +167,7 @@ namespace VRCX
                     if (match.Success == true)
                     {
                         var path = match.Groups[1].Value;
-                        // var _arguments = Uri.EscapeDataString(arguments);
+                        var _arguments = Uri.EscapeDataString(arguments);
                         Process.Start(new ProcessStartInfo
                         {
                             WorkingDirectory = path,
@@ -139,8 +188,8 @@ namespace VRCX
             {
                 using (var key = Registry.ClassesRoot.OpenSubKey(@"VRChat\shell\open\command"))
                 {
-                    // "C:\Program Files (x86)\Steam\steamapps\common\VRChat\launch.bat" "C:\Program Files (x86)\Steam\steamapps\common\VRChat" "%1"
-                    var match = Regex.Match(key.GetValue(string.Empty) as string, "^\"(.+?)\\\\launch.bat\"");
+                    // "C:\Program Files (x86)\Steam\steamapps\common\VRChat\launch.exe" "%1" %*
+                    var match = Regex.Match(key.GetValue(string.Empty) as string, "(?!\")(.+?\\\\VRChat.*)(!?\\\\launch.exe\")");
                     if (match.Success == true)
                     {
                         var path = match.Groups[1].Value;
