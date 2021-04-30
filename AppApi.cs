@@ -61,11 +61,11 @@ namespace VRCX
                 cmd.ExecuteNonQuery();
 
                 string c_detail = detail.Replace("'", "''");
-
+                string c_user = user.Replace("'", "''");
                 switch (logtype)
                 {
                     case 0:
-                        cmd.CommandText = "INSERT INTO Feedlog(Date, Time, Type,User,Detail,UserID,WorldID) VALUES('" + date + "','" + time + "','" + type + "','" + user + "','" + c_detail + "','" + userid + "','" + worldid + "')";
+                        cmd.CommandText = "INSERT INTO Feedlog(Date, Time, Type,User,Detail,UserID,WorldID) VALUES('" + date + "','" + time + "','" + type + "','" + c_user + "','" + c_detail + "','" + userid + "','" + worldid + "')";
                         cmd.ExecuteNonQuery();
                         break;
                     case 1:
