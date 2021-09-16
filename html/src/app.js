@@ -5336,15 +5336,17 @@ speechSynthesis.getVoices();
             if ((user.status !== 'active') && (id) && (id !== API.currentUser.id) &&
                 (!this.friendsGroup0_.filter(e => e.id === id).length > 0) &&
                 (!this.friendsGroup1_.filter(e => e.id === id).length > 0)) {
+            // Active
+                style.active = true;
+            } else if (user.location === 'offline') {
                 // Offline
                 style.offline = true;
-            } else if ((user.location === 'offline') ||
-                ((user.state === 'active') && (user.location === 'private'))) {
-                // Offline
-                style.offline = true;
+            } else if (user.state === 'active') {
+                // Active
+                style.active = true;
             } else if (user.status === 'active') {
                 // Online
-                style.active = true;
+               style.online = true;
             } else if (user.status === 'join me') {
                 // Join Me
                 style.joinme = true;
@@ -5509,7 +5511,8 @@ speechSynthesis.getVoices();
         }
      if ((props.location) &&
             (props.location[0] !== 'offline') &&
-            (props.location[1] !== 'offline')) {
+            (props.location[0] !== '') &&
+            ((props.location[1] !== 'offline') && (props.location[0] !== 'private'))) {
             $app.addFeed('GPS', ref, {
                 location: [
                     props.location[0],
@@ -5579,6 +5582,17 @@ speechSynthesis.getVoices();
     };
 
     $app.methods.addFeed = async function (type, ref, extra) {
+
+        var bl_array = this.blocklistArray.toString().split("\n");
+        for(i in bl_array){
+            //console.log(bl_array[i])
+            if(ref.displayName == bl_array[i]) {
+                    console.log("Blacklisted " + ref.displayName);
+                return;
+            }
+        }
+            //console.log("Added to feed " + ref.displayName);
+ 
         this.feedTable.data.push({
             created_at: new Date().toJSON(),
             type,
@@ -5605,11 +5619,12 @@ speechSynthesis.getVoices();
             AppApi.WriteSQlog(0,new Date().toDateString(),new Date().toTimeString(),type,ref.displayName,"Offline",ref.id,"");
             break;
         }
-    }
+     
         this.sweepFeed();
         this.saveFeed();
         this.updateSharedFeed(false);
         this.notifyMenu('feed');
+    }
     };
 
     $app.methods.clearFeed = function () {
@@ -9297,21 +9312,40 @@ speechSynthesis.getVoices();
             }
         });
     };
-
+ $app.data.launchOptionsDialog = {
+        visible: false,
+        arguments: ''
+    };
     // App: Launch Options
 
     $app.data.launchArguments = VRCXStorage.Get('launchArguments');
-
+   
+ 
     // App: Launch Options Dialog
 
-    $app.data.launchOptionsDialog = {
+    $app.data.blockListDialog = {
         visible: false,
         arguments: ''
     };
 
+ $app.data.blocklistArray = VRCXStorage.Get('blocklistArray');
+
     API.$on('LOGOUT', function () {
         $app.launchOptionsDialog.visible = false;
+        $app.data.blockListDialog.visible = false;
     });
+
+    $app.methods.updateBlocklistOptions = function () {
+        var D = this.blockListDialog;
+        D.visible = false;
+        var args = D.arguments;// String(D.arguments).replace(/\s+/g, ' ').trim();
+        this.blocklistArray = args;
+        VRCXStorage.Set('blocklistArray', args);
+        this.$message({
+            message: 'updated',
+            type: 'success'
+        });
+    };
 
     $app.methods.updateLaunchOptions = function () {
         var D = this.launchOptionsDialog;
@@ -9332,6 +9366,12 @@ speechSynthesis.getVoices();
         D.visible = true;
     };
 
+    $app.methods.showBlocklistOptions = function () {
+        this.$nextTick(() => adjustDialogZ(this.$refs.launchOptionsDialog.$el));
+        var D = this.blockListDialog;
+        D.arguments = this.blocklistArray;
+        D.visible = true;
+    };
     // App: Notification position
 
     $app.data.notificationPositionDialog = {
