@@ -1,6 +1,7 @@
 
 # VRCX PyPyDance Companion
-**Zuwaii : Added blacklist option to avoid double join-in spam. This fork is outdated, used as a reference atm. (it still work but certain functions is not working)
+**Zuwaii : Added blacklist option to avoid double join-in spam, this will just block that user being in the feed.</br> This fork is outdated, used as a reference atm. (it still work but certain functions is not working)</BR>
+
 ![image](https://user-images.githubusercontent.com/9972076/133565553-270ccfa0-3455-4988-a839-41b571d3d54e.png)
 ![VRCX_BbEHwUC7Hb](https://user-images.githubusercontent.com/9972076/133565403-e0de1b11-2ffd-4f80-8bbc-2b8b99241667.png)
  
