@@ -116,7 +116,7 @@ html
                                 template(v-else-if="scope.row.type === 'Status'")
                                     el-tooltip(placement="top")
                                         template(#content)
-                                            span(v-if="scope.row.status[1].status === 'active'") Online
+                                            span(v-if="scope.row.status[1].status === 'active'") Active
                                             span(v-else-if="scope.row.status[1].status === 'join me'") Join Me
                                             span(v-else-if="scope.row.status[1].status === 'ask me'") Ask Me
                                             span(v-else-if="scope.row.status[1].status === 'busy'") Do Not Disturb
@@ -128,7 +128,7 @@ html
                                         i.el-icon-right
                                     el-tooltip(placement="top")
                                         template(#content)
-                                            span(v-if="scope.row.status[0].status === 'active'") Online
+                                            span(v-if="scope.row.status[0].status === 'active'") Active
                                             span(v-else-if="scope.row.status[0].status === 'join me'") Join Me
                                             span(v-else-if="scope.row.status[0].status === 'ask me'") Ask Me
                                             span(v-else-if="scope.row.status[0].status === 'busy'") Do Not Disturb
@@ -829,6 +829,9 @@ html
                     div.options-container-item
                         el-button-group
                             el-button(size="small" icon="el-icon-s-operation" @click="showLaunchOptions()") Launch Options
+                    div.options-container-item
+                        el-button-group
+                            el-button(size="small" icon="el-icon-s-operation" @click="showBlocklistOptions()") Blacklist Options
                 div.options-container
                     span.header PyPyDance Companion Fork Options
                     div.options-container-item
@@ -961,7 +964,8 @@ html
                                 div
                                     el-tooltip(v-if="userDialog.ref.status" placement="top")
                                         template(#content)
-                                            span(v-if="userDialog.ref.location === 'offline'") Offline
+                                            span(v-if="userDialog.ref.state === 'active'") Active
+                                            span(v-else-if="userDialog.ref.location === 'offline'") Offline
                                             span(v-else-if="userDialog.ref.status === 'active'") Online
                                             span(v-else-if="userDialog.ref.status === 'join me'") Join Me
                                             span(v-else-if="userDialog.ref.status === 'ask me'") Ask Me
@@ -1452,6 +1456,15 @@ html
                         el-button(size="small" @click="openExternalLink('https://docs.vrchat.com/docs/launch-options')") VRChat Docs
                         el-button(size="small" @click="openExternalLink('https://docs.unity3d.com/Manual/CommandLineArguments.html')") Unity Manual
                         el-button(type="primary" size="small" :disabled="launchOptionsDialog.loading" @click="updateLaunchOptions" style="margin-left:auto") OK
+            //- BlockList
+            el-dialog.x-dialog(ref="blockListDialog" :visible.sync="blockListDialog.visible" title="BlackList Options" width="400px")
+                div(style='font-size:12px;')
+                    | Hide curtain users from your feed. #[br]
+                    | Enter the full username that you want to hide.
+                el-input(type="textarea" v-model="blockListDialog.arguments" size="mini" show-word-limit :autosize="{ minRows:2, maxRows:5 }" placeholder="" style="margin-top:10px")
+                template(#footer)
+                    div(style="display:flex")
+                        el-button(type="primary" size="small" :disabled="blockListDialog.loading" @click="updateBlocklistOptions" style="margin-left:auto") OK
 
             //- dialog: launch
             el-dialog.x-dialog(ref="launchDialog" :visible.sync="launchDialog.visible" title="Launch" width="400px")
